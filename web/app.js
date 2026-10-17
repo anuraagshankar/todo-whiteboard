@@ -11,6 +11,7 @@ const ICONS = {
   tick: '<path d="M6 12.5l4 4 8-9"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
+  grip: '<circle cx="8.5" cy="5" r="2"/><circle cx="15.5" cy="5" r="2"/><circle cx="8.5" cy="12" r="2"/><circle cx="15.5" cy="12" r="2"/><circle cx="8.5" cy="19" r="2"/><circle cx="15.5" cy="19" r="2"/>',
   broom:
     '<path d="M18 2l-3.4 7.5M11.4 11.4c.3-1.6 1.7-2.4 3.1-2s2.1 1.9 1.5 3.4zM13.4 13c-1 2.1-1.8 4.6-1.9 7.2"/>' +
     '<path d="M11.4 11.4C9.2 13.6 7.4 16.6 6.4 20.2q1.4-1.2 2.6.4 1.1-1.6 2.5.3 1.1-1.6 2.5 0 1.1-1.4 2.6-.6C16.9 17.2 16.6 15 16 12.8"/>',
@@ -31,7 +32,7 @@ themeBtn.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' 
 // { title, mode, text, items, x, y, w, h, z }: x/y are null until it is first
 // placed on the Mac canvas, h is null while it grows with its content.
 // note.el (and modeBtn/clearBtn) point at whichever editor is showing it.
-const NOTE_W = 284; // includes the column reserved for item delete buttons
+const NOTE_W = 288; // includes the column reserved for item delete buttons
 const NOTE_H = 160; // starting (minimum) height; notes grow with content up to 75% of the page height
 const GAP = 16; // minimum space kept between a new note and existing ones
 const STEP = 24; // grid the empty-space search walks, matches the dot grid
@@ -181,7 +182,7 @@ function renderBody(note, focus) {
   body.querySelectorAll('textarea').forEach(fit);
 
   if (focus) {
-    const input = body.querySelector(`[data-i="${focus.i}"]`);
+    const input = body.querySelector(`.text[data-i="${focus.i}"]`);
     const caret = focus.caret ?? input.value.length;
     input.focus();
     input.setSelectionRange(caret, caret);
@@ -201,6 +202,14 @@ function itemRow(note, i, nested) {
   const it = note.items[i];
   const row = document.createElement('div');
   row.className = `item${nested ? ' sub' : ''}${it.done ? ' done' : ''}`;
+  row.dataset.i = i;
+  // Grip, shown on hover in the margin left of the box: drag to reorder.
+  const grip = document.createElement('button');
+  grip.className = 'grip';
+  grip.title = 'Drag to reorder';
+  grip.setAttribute('aria-label', 'Drag to reorder');
+  grip.innerHTML = svg('grip');
+  grip.addEventListener('pointerdown', (e) => dragItem(note, i, row, e));
   // Outlined box, with a tick when marked (not a filled native checkbox).
   const box = document.createElement('button');
   box.className = 'box';
@@ -235,8 +244,72 @@ function itemRow(note, i, nested) {
     removeItem(note, i);
     renderBody(note);
   });
-  row.append(box, text, remove);
+  row.append(grip, box, text, remove);
   return row;
+}
+
+// Drag an item by its grip to reorder it within its section; a parent carries
+// its sub-items. Dragging right of where it started makes it a sub-item, left
+// makes it top-level, where allowed: a drop inside a group is always a
+// sub-item, the first item of a section can't be one, and a parent with
+// sub-items stays top-level (so it only lands between groups).
+function dragItem(note, i, row, e) {
+  e.preventDefault();
+  const { items } = note;
+  const it = items[i];
+  let end = i + 1;
+  if (it.level === 0) while (end < items.length && items[end].level === 1) end++;
+  const block = items.slice(i, end);
+  const hasSubs = block.length > 1;
+  const list = row.parentElement;
+  const inBlock = (r) => block.includes(items[r.dataset.i]);
+  const rows = [...list.children].filter((r) => !inBlock(r));
+  [...list.children].filter(inBlock).forEach((r) => r.classList.add('dragging'));
+  const line = document.createElement('div');
+  line.className = 'drop-line';
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  const startX = e.clientX;
+  let drop = null;
+
+  const move = (e) => {
+    let k = rows.filter((r) => {
+      const b = r.getBoundingClientRect();
+      return b.top + b.height / 2 < e.clientY;
+    }).length;
+    if (hasSubs) while (rows[k]?.classList.contains('sub')) k++;
+    const above = rows[k - 1];
+    const below = rows[k];
+    const dx = e.clientX - startX;
+    let level = dx > 24 ? 1 : dx < -24 ? 0 : it.level;
+    if (hasSubs || !above) level = 0;
+    else if (below?.classList.contains('sub')) level = 1;
+    drop = { above: above && items[above.dataset.i], below: below && items[below.dataset.i], level };
+    line.classList.toggle('sub', level === 1);
+    list.insertBefore(line, below ?? null);
+  };
+  const done = (commit) => () => {
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', onUp);
+    grip.removeEventListener('pointercancel', onCancel);
+    grip.removeEventListener('lostpointercapture', onCancel);
+    if (commit && drop) {
+      items.splice(i, block.length);
+      block[0].level = drop.level;
+      // A sub-item goes right after the row above it (same parent, or first
+      // sub-item of that parent); a top-level item goes right before the row below.
+      const at =
+        drop.level === 1 ? items.indexOf(drop.above) + 1 : drop.below ? items.indexOf(drop.below) : items.length;
+      items.splice(at, 0, ...block);
+    }
+    renderBody(note);
+  };
+  const onUp = done(true);
+  const onCancel = done(false);
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', onUp);
+  grip.addEventListener('pointercancel', onCancel);
+  grip.addEventListener('lostpointercapture', onCancel);
 }
 
 // Marking a parent marks (or unmarks) all its sub-items with it.

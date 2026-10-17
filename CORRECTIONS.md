@@ -20,7 +20,7 @@ Rolling list of corrections and bugs found while reviewing the web prototype. Ea
 
 ## Note size
 
-7. **Notes are a little wider with larger text** than first built (title 17, body 15; width now 284pt, see 12).
+7. **Notes are a little wider with larger text** than first built (title 17, body 15; width now 288pt, see 12 and 16).
 8. **Notes grow instead of scrolling**: a note's height follows its content, from its starting height up to 75% of the window height; only past that does the body scroll.
 14. **A resized height is fixed**: once the user drags a note's height (top/bottom edge or a corner), that height is both its minimum and maximum: it no longer grows with content, the body scrolls instead, and it can be dragged shorter than its content (down to the default size). Resizing only the width leaves the height auto-growing. Releasing a height drag at the minimum (default) height resets this: the note grows with its content again.
 
@@ -32,5 +32,6 @@ Rolling list of corrections and bugs found while reviewing the web prototype. Ea
 
 9. **Up/Down arrows move between items, never within one**: Up always goes to the item above and Down to the item below, with the cursor at the end of that item in both cases, even when the item wraps onto several lines (on-screen order, including into the marked section; nothing happens past the first/last item).
 10. **Items word-wrap** onto further lines instead of scrolling sideways on one line; the checkbox stays aligned with the first line. Still one item per "line" in the data: Enter makes a new item, never a line break.
-12. **Hover × deletes an item**: notes are a little wider (284pt) to reserve a column at the right of every item that text never flows into. Hovering an item (unmarked or marked) shows an × there (slightly larger than first built, nearly the checkbox's size); clicking it deletes the item outright (not marked done). Its sub-items stay, joining the parent above.
+12. **Hover × deletes an item**: notes are a little wider (288pt) to reserve a column at the right of every item that text never flows into. Hovering an item (unmarked or marked) shows an × there (slightly larger than first built, nearly the checkbox's size); clicking it deletes the item outright (not marked done). Its sub-items stay, joining the parent above.
 13. **"Delete marked items" footer button, checkbox mode only**: a second button on the left of the footer, next to the mode button, that deletes every marked item at once with no confirmation. Hidden in plain text mode. Its icon is a line-drawn broom (tilted handle, small cap, flared bristles with a wavy bottom edge, no dust); reuse the same path from `web/app.js` (`ICONS.broom`) as a custom symbol/shape.
+16. **Item drag grips sit clear of both the checkbox and the note border**: the note's left padding is 16pt (right stays 12pt), and the ⋮⋮ grip sits in that margin with a few points of space on each side (grip too close to the checkbox, then too close to the border, in the first versions). Note width went to 288pt so the text width stayed the same.

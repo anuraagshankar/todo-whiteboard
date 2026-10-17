@@ -76,7 +76,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
   max-height: 75vh; /* grows with content up to here, then the body scrolls */
-  padding: 10px 12px 8px;
+  padding: 10px 12px 8px 16px; /* wider left padding leaves room for the item grips */
 }
 .note.dragging { cursor: grabbing; }
 
@@ -114,13 +114,36 @@ body {
   font-size: 15px;
   display: flex;
   flex-direction: column;
+  /* Reach into the left margin so the item grips aren't clipped by the scroll area. */
+  margin-left: -16px;
+  padding-left: 16px;
 }
 /* Height is set from its content in JS; flex-grow fills a short note. */
 .editor textarea { display: block; resize: none; overflow: hidden; line-height: 1.4; }
 .editor .body > textarea { width: 100%; flex: 1 0 auto; tab-size: 4; }
 
-.item { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
+.item { position: relative; display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 .item.sub { padding-left: 22px; }
+/* Drag grip: in the margin left of the box, shown on hover. */
+.item .grip {
+  position: absolute;
+  left: -14px;
+  top: 3px;
+  width: 11px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  visibility: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.item.sub .grip { left: 8px; }
+.item:hover .grip { visibility: visible; }
+.item .grip svg { width: 12px; height: 14px; fill: currentColor; stroke: none; }
+.item.dragging { opacity: 0.4; }
+.drop-line { height: 2px; margin: -1px 0; background: var(--muted); border-radius: 1px; }
+.drop-line.sub { margin-left: 22px; }
 .item .box {
   flex: none;
   width: 15px;
