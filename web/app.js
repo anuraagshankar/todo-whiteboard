@@ -66,6 +66,8 @@ const MODES = {
 };
 
 function setMode(note, mode) {
+  if (note.mode === 'checklist' && mode === 'text') note.text = itemsToText(note.items);
+  if (note.mode === 'text' && mode === 'checklist') note.items = textToItems(note.text);
   note.mode = mode;
   note.modeBtn.innerHTML = svg(MODES[mode].icon);
   note.modeBtn.title = MODES[mode].label;
@@ -73,7 +75,7 @@ function setMode(note, mode) {
   renderBody(note);
 }
 
-// Body. Plain text mode is one textarea. Checkbox mode is a flat list of
+// Body. Plain text mode is one textarea (note.text). Checkbox mode is a flat list (note.items) of
 // { text, done, level } items, level 0 or 1; a level-1 item belongs to the
 // nearest level-0 item above it. Unmarked items show first, marked ones in a
 // Done section below; a sub-item is shown nested only when its parent is in
@@ -82,6 +84,49 @@ const parentOf = (items, i) => {
   for (let j = i - 1; j >= 0; j--) if (items[j].level === 0) return j;
   return -1;
 };
+const isNested = (items, i) => {
+  const p = parentOf(items, i);
+  return items[i].level === 1 && p !== -1 && items[p].done === items[i].done;
+};
+
+// Mode switching converts the content. Checkbox -> text, in on-screen order:
+//   - item
+//   \t- sub-item
+//   # Done:
+//   # marked item
+//   \t# marked sub-item
+// Text -> checkbox reads the same format back: one item per non-empty line,
+// a leading tab nests it, a leading "- " (or "# " after "# Done:") is stripped.
+const DONE_HEADER = '# Done:';
+
+function itemsToText(items) {
+  const lines = (done, mark) =>
+    items
+      .map((it, i) => (it.done === done && it.text.trim() ? `${isNested(items, i) ? '\t' : ''}${mark} ${it.text}` : null))
+      .filter((line) => line !== null);
+  const active = lines(false, '-');
+  const done = lines(true, '#');
+  return [...active, ...(done.length ? [DONE_HEADER, ...done] : [])].join('\n');
+}
+
+function textToItems(text) {
+  const items = [];
+  let done = false;
+  let hasParent = false; // a top-level item exists above, in the current section
+  for (const line of text.split(/\r?\n/)) {
+    if (line.trim() === DONE_HEADER) {
+      done = true;
+      hasParent = false;
+      continue;
+    }
+    const nested = line.startsWith('\t') && hasParent;
+    const content = line.trimStart().replace(done ? /^# / : /^- /, '');
+    if (!content.trim()) continue;
+    items.push({ text: content, done, level: nested ? 1 : 0 });
+    if (!nested) hasParent = true;
+  }
+  return items;
+}
 
 function renderBody(note, focus) {
   const body = note.el.querySelector('.body');
@@ -94,6 +139,17 @@ function renderBody(note, focus) {
       note.text = area.value;
       fit(area);
     });
+    // Tab types a tab character instead of moving focus to the next button.
+    // insertText goes through the browser's editing, so Cmd+Z undoes it like
+    // typed text (setting the value directly breaks the undo history).
+    area.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+      if (!document.execCommand('insertText', false, '\t')) {
+        area.setRangeText('\t', area.selectionStart, area.selectionEnd, 'end');
+        area.dispatchEvent(new Event('input'));
+      }
+    });
     body.append(area);
     fit(area);
     return;
@@ -105,10 +161,7 @@ function renderBody(note, focus) {
   const section = (done) => {
     const list = document.createElement('div');
     items.forEach((it, i) => {
-      if (it.done !== done) return;
-      const p = parentOf(items, i);
-      const nested = it.level === 1 && p !== -1 && items[p].done === done;
-      list.append(itemRow(note, i, nested));
+      if (it.done === done) list.append(itemRow(note, i, isNested(items, i)));
     });
     return list;
   };
@@ -268,7 +321,8 @@ function addNote() {
         <button class="clear-done" title="Delete marked items" aria-label="Delete marked items">${svg('broom')}</button>
       </div>
       <button class="trash" title="Delete note" aria-label="Delete note">${svg('trash')}</button>
-    </footer>`;
+    </footer>
+    ${EDGES.map((dir) => `<div class="handle ${dir}" data-dir="${dir}"></div>`).join('')}`;
   const note = {
     el,
     modeBtn: el.querySelector('.mode'),
@@ -285,6 +339,7 @@ function addNote() {
   place(note);
   canvas.append(el);
   makeDraggable(note);
+  makeResizable(note);
 }
 
 function deleteNote(note) {
@@ -298,8 +353,8 @@ let topZ = 0;
 function makeDraggable(note) {
   const { el } = note;
   el.addEventListener('pointerdown', (e) => {
-    // Text fields, checkboxes and buttons keep their own clicks.
-    if (e.target.closest('input, textarea, button')) return;
+    // Text fields, checkboxes, buttons and resize handles keep their own clicks.
+    if (e.target.closest('input, textarea, button, .handle')) return;
     const dx = e.clientX - note.x;
     const dy = e.clientY - note.y;
     // Bring to front with z-index, not by moving the element in the DOM:
@@ -324,6 +379,61 @@ function makeDraggable(note) {
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
+  });
+}
+
+// Resize from any edge or corner, never below the default size or past the
+// canvas edges. Once the height has been dragged, it is fixed: the note stops
+// growing with its content and the body scrolls instead. Releasing at the
+// minimum height makes it grow with its content again.
+const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+function makeResizable(note) {
+  const { el } = note;
+  el.querySelectorAll('.handle').forEach((handle) => {
+    const dir = handle.dataset.dir;
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const start = { px: e.clientX, py: e.clientY, x: note.x, y: note.y, w: el.offsetWidth, h: el.offsetHeight };
+      el.style.zIndex = ++topZ;
+      handle.setPointerCapture(e.pointerId);
+
+      const move = (e) => {
+        const dx = e.clientX - start.px;
+        const dy = e.clientY - start.py;
+        if (dir.includes('e')) {
+          el.style.width = `${clamp(start.w + dx, NOTE_W, canvas.clientWidth - start.x)}px`;
+        } else if (dir.includes('w')) {
+          const w = clamp(start.w - dx, NOTE_W, start.x + start.w);
+          el.style.width = `${w}px`;
+          note.x = start.x + start.w - w;
+        }
+        if (dir.includes('s') || dir.includes('n')) {
+          const h = dir.includes('s')
+            ? clamp(start.h + dy, NOTE_H, canvas.clientHeight - start.y)
+            : clamp(start.h - dy, NOTE_H, start.y + start.h);
+          el.style.height = `${h}px`;
+          el.style.maxHeight = 'none';
+          if (dir.includes('n')) note.y = start.y + start.h - h;
+        }
+        place(note);
+      };
+      const up = () => {
+        if (parseFloat(el.style.height) <= NOTE_H) {
+          el.style.height = '';
+          el.style.maxHeight = '';
+        }
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.removeEventListener('pointercancel', up);
+        handle.removeEventListener('lostpointercapture', up);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+      handle.addEventListener('pointercancel', up);
+      handle.addEventListener('lostpointercapture', up);
+    });
   });
 }
 

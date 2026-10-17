@@ -22,6 +22,11 @@ Rolling list of corrections and bugs found while reviewing the web prototype. Ea
 
 7. **Notes are a little wider with larger text** than first built (title 17, body 15; width now 284pt, see 12).
 8. **Notes grow instead of scrolling**: a note's height follows its content, from its starting height up to 75% of the window height; only past that does the body scroll.
+14. **A resized height is fixed**: once the user drags a note's height (top/bottom edge or a corner), that height is both its minimum and maximum: it no longer grows with content, the body scrolls instead, and it can be dragged shorter than its content (down to the default size). Resizing only the width leaves the height auto-growing. Releasing a height drag at the minimum (default) height resets this: the note grows with its content again.
+
+## Plain text mode
+
+15. **Tab types a tab character** (replacing any selection) instead of moving focus to the next control. Tabs render 4 spaces wide. It must be a normal text edit: Cmd+Z undoes a typed tab like any other typing (the web version first broke undo by setting the text directly).
 
 ## Checkbox items
 
