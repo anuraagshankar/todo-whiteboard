@@ -14,3 +14,18 @@ Rolling list of corrections and bugs found while reviewing the web prototype. Ea
 
 3. **The + button matches the current mode**, not its inverse: same surface as the notes (light in light mode, dark in dark mode).
 4. **The light/dark toggle is an icon, not text**: a round icon button showing the mode a click switches to (moon in light mode, sun in dark mode).
+5. **Checkboxes are outlined, never filled**: a thin gray square outline; when marked, a gray tick inside the same outline (no filled background, unlike the native macOS/iOS checkbox).
+6. **Marked items have no "Done" heading**: they sit below a plain horizontal rule, in gray with strikethrough text.
+11. **A horizontal rule separates the body from the footer**, the same minimal rule as between the title and the body.
+
+## Note size
+
+7. **Notes are a little wider with larger text** than first built (title 17, body 15; width now 284pt, see 12).
+8. **Notes grow instead of scrolling**: a note's height follows its content, from its starting height up to 75% of the window height; only past that does the body scroll.
+
+## Checkbox items
+
+9. **Up/Down arrows move between items, never within one**: Up always goes to the item above and Down to the item below, with the cursor at the end of that item in both cases, even when the item wraps onto several lines (on-screen order, including into the marked section; nothing happens past the first/last item).
+10. **Items word-wrap** onto further lines instead of scrolling sideways on one line; the checkbox stays aligned with the first line. Still one item per "line" in the data: Enter makes a new item, never a line break.
+12. **Hover × deletes an item**: notes are a little wider (284pt) to reserve a column at the right of every item that text never flows into. Hovering an item (unmarked or marked) shows an × there (slightly larger than first built, nearly the checkbox's size); clicking it deletes the item outright (not marked done). Its sub-items stay, joining the parent above.
+13. **"Delete marked items" footer button, checkbox mode only**: a second button on the left of the footer, next to the mode button, that deletes every marked item at once with no confirmation. Hidden in plain text mode. Its icon is a line-drawn broom (tilted handle, small cap, flared bristles with a wavy bottom edge, no dust); reuse the same path from `web/app.js` (`ICONS.broom`) as a custom symbol/shape.
