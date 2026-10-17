@@ -1,0 +1,65 @@
+:root {
+  --bg: #f5f5f7;
+  --dot: #d2d2d7;
+  --note: #ffffff;
+  --note-border: #d2d2d7;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --text: #1d1d1f;
+  font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --dot: #3a3a3c;
+  --note: #2c2c2e;
+  --note-border: #3a3a3c;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --text: #f5f5f7;
+}
+
+* { box-sizing: border-box; margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+
+body {
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#canvas {
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.note {
+  position: absolute;
+  background: var(--note);
+  border: 1px solid var(--note-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px var(--shadow);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.note.dragging { cursor: grabbing; }
+
+/* Floating buttons: same surface as the notes, so they follow the theme. */
+.theme, .add {
+  position: fixed;
+  border-radius: 50%;
+  border: 1px solid var(--note-border);
+  background: var(--note);
+  box-shadow: 0 2px 8px var(--shadow);
+  display: grid;
+  place-items: center;
+}
+.theme svg, .add svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+
+.theme { top: 16px; right: 16px; width: 36px; height: 36px; }
+.theme svg { width: 18px; height: 18px; stroke-width: 1.8; }
+
+.add { right: 24px; bottom: 24px; width: 48px; height: 48px; }
+.add svg { width: 22px; height: 22px; stroke-width: 2.2; }

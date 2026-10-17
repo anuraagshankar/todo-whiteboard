@@ -17,5 +17,9 @@ Personal whiteboard-style notes and todo app: a free-form canvas where I place a
 
 ## Workflow
 1. Build and refine the UI in `web/` until I approve it.
-2. Only then build `apple/`, treating the web app as the source of truth for design and behavior. Match it exactly unless something is impossible or inefficient on macOS/iOS; if so, tell me rather than silently changing it.
+2. Only then build `apple/`, treating the web app as the source of truth for design and behavior, and checking every item in `CORRECTIONS.md` (corrections I made while reviewing the web app). Match it exactly unless something is impossible or inefficient on macOS/iOS; if so, tell me rather than silently changing it.
 3. Always prefer the lightest, most efficient implementation, especially on iPhone.
+
+## Instructions
+- Only implement the exact things the user has asked for, no extra features.
+- If anything extra is needed, the user will explicitly ask for it.
