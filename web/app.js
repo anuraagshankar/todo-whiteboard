@@ -29,7 +29,7 @@ setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 themeBtn.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
 
 // Notes, shared by the Mac and iPhone views. Each note is
-// { title, mode, text, items, x, y, w, h, z }: x/y are null until it is first
+// { id, title, mode, text, items, x, y, w, h, z }: x/y are null until it is first
 // placed on the Mac canvas, h is null while it grows with its content.
 // note.el (and modeBtn/clearBtn) point at whichever editor is showing it.
 const NOTE_W = 288; // includes the column reserved for item delete buttons
@@ -38,7 +38,7 @@ const GAP = 16; // minimum space kept between a new note and existing ones
 const STEP = 24; // grid the empty-space search walks, matches the dot grid
 const notes = [];
 
-const newNote = () => ({ title: '', mode: 'text', text: '', items: [], x: null, y: null, w: NOTE_W, h: null, z: 0 });
+const newNote = () => ({ id: crypto.randomUUID(), title: '', mode: 'text', text: '', items: [], x: null, y: null, w: NOTE_W, h: null, z: 0 });
 
 // Mode button shows the note's current mode.
 const MODES = {
@@ -66,7 +66,10 @@ function mountEditor(note, el) {
   note.clearBtn = el.querySelector('.clear-done');
   const title = el.querySelector('.title');
   title.value = note.title;
-  title.addEventListener('input', () => (note.title = title.value));
+  title.addEventListener('input', () => {
+    note.title = title.value;
+    save(note);
+  });
   note.modeBtn.addEventListener('click', () => setMode(note, MODES[note.mode].next));
   note.clearBtn.addEventListener('click', () => clearDone(note));
   el.querySelector('.trash').addEventListener('click', () => deleteNote(note));
@@ -78,6 +81,7 @@ function setMode(note, mode) {
   if (note.mode === 'text' && mode === 'checklist') note.items = textToItems(note.text);
   note.mode = mode;
   showMode(note);
+  save(note);
 }
 
 function showMode(note) {
@@ -150,6 +154,7 @@ function renderBody(note, focus) {
     area.addEventListener('input', () => {
       note.text = area.value;
       fit(area);
+      save(note);
     });
     // Tab types a tab character instead of moving focus to the next button.
     // insertText goes through the browser's editing, so Cmd+Z undoes it like
@@ -232,6 +237,7 @@ function itemRow(note, i, nested) {
     }
     it.text = text.value;
     fit(text);
+    save(note);
   });
   text.addEventListener('keydown', (e) => itemKey(note, i, text, e));
   // Delete button, shown on hover, in its own column the text never flows into.
@@ -243,6 +249,7 @@ function itemRow(note, i, nested) {
   remove.addEventListener('click', () => {
     removeItem(note, i);
     renderBody(note);
+    save(note);
   });
   row.append(grip, box, text, remove);
   return row;
@@ -301,6 +308,7 @@ function dragItem(note, i, row, e) {
       const at =
         drop.level === 1 ? items.indexOf(drop.above) + 1 : drop.below ? items.indexOf(drop.below) : items.length;
       items.splice(at, 0, ...block);
+      save(note);
     }
     renderBody(note);
   };
@@ -321,6 +329,7 @@ function toggleItem(note, i) {
     for (let j = i + 1; j < items.length && items[j].level === 1; j++) items[j].done = done;
   }
   renderBody(note);
+  save(note);
 }
 
 function itemKey(note, i, input, e) {
@@ -352,6 +361,7 @@ function itemKey(note, i, input, e) {
     const level = it.level === 0 && items[i + 1]?.level === 1 ? 1 : it.level;
     items.splice(i + 1, 0, { text: rest, done: false, level });
     renderBody(note, { i: i + 1, caret: 0 });
+    save(note);
   } else if (e.key === 'Tab') {
     // Tab nests one level only, under an unmarked parent; Shift+Tab un-nests.
     e.preventDefault();
@@ -364,6 +374,7 @@ function itemKey(note, i, input, e) {
       it.level = 1;
     }
     renderBody(note, { i, caret: input.selectionStart });
+    save(note);
   } else if (e.key === 'Backspace' && it.text === '') {
     const active = items.map((x, j) => (x.done ? -1 : j)).filter((j) => j !== -1);
     if (active.length === 1) return;
@@ -372,6 +383,7 @@ function itemKey(note, i, input, e) {
     removeItem(note, i);
     const prev = active[pos - 1];
     renderBody(note, prev !== undefined ? { i: prev } : { i: active[pos + 1] - 1, caret: 0 });
+    save(note);
   }
 }
 
@@ -387,6 +399,7 @@ function removeItem(note, i) {
 function clearDone(note) {
   for (let i = note.items.length - 1; i >= 0; i--) if (note.items[i].done) removeItem(note, i);
   renderBody(note);
+  save(note);
 }
 
 function deleteNote(note) {
@@ -396,6 +409,9 @@ function deleteNote(note) {
 
 function removeNote(note) {
   notes.splice(notes.indexOf(note), 1);
+  clearTimeout(note.timer);
+  deleted.add(note.id);
+  send(note, () => db.from('notes').delete().eq('id', note.id));
   render();
 }
 
@@ -433,6 +449,7 @@ function renderCanvas() {
   notes.filter((n) => n.x === null).forEach((n) => {
     Object.assign(n, findSpot());
     noteEl(n);
+    save(n);
   });
 }
 
@@ -462,6 +479,7 @@ function addNote() {
   const note = { ...newNote(), ...findSpot() };
   notes.push(note);
   noteEl(note);
+  save(note);
 }
 
 let topZ = 0;
@@ -486,6 +504,7 @@ function makeDraggable(note) {
       layout(note);
     };
     const up = () => {
+      save(note);
       el.classList.remove('dragging');
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
@@ -539,6 +558,7 @@ function makeResizable(note) {
           note.h = null;
           layout(note);
         }
+        save(note);
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
         handle.removeEventListener('pointercancel', up);
@@ -579,7 +599,10 @@ function showList() {
   cardsEl.replaceChildren(...notes.map(cardEl));
 }
 
+let cardNote = null; // note open on the card screen
+
 function openCard(note) {
+  cardNote = note;
   listScreen.hidden = true;
   phoneAdd.hidden = true;
   cardScreen.hidden = false;
@@ -664,6 +687,7 @@ scrim.addEventListener('pointerdown', closeMenu);
 phoneAdd.addEventListener('click', () => {
   const note = newNote();
   notes.push(note);
+  save(note);
   openCard(note);
   cardEditor.querySelector('.title').focus();
 });
@@ -738,6 +762,118 @@ function widgetCard(note) {
   return card;
 }
 
+// --- Sync: every note is a row in Supabase (supabase/schema.sql) ---
+// A change saves shortly after it's made; changes from other devices arrive
+// over Realtime. If two devices change the same note, the last save wins.
+
+const db = supabase.createClient(
+  'https://pgwitomfqzskpilqiklr.supabase.co',
+  'sb_publishable_72x2Nmm-9RHHzrm956unPA_jgDc-F3o',
+);
+const SAVE_DELAY = 500; // ms after the last change
+const deleted = new Set(); // ids deleted here, so late echoes of their saves are ignored
+let loaded = false;
+
+// The saved fields of a note (or a row), in a fixed order so two can be compared.
+const rowOf = (n) => ({
+  id: n.id,
+  title: n.title,
+  mode: n.mode,
+  text: n.text,
+  items: n.items.map(({ text, done, level }) => ({ text, done, level })),
+  x: n.x,
+  y: n.y,
+  w: n.w,
+  h: n.h,
+  z: n.z,
+});
+const unsaved = (note) => note.timer || note.sending;
+
+function save(note) {
+  clearTimeout(note.timer);
+  note.timer = setTimeout(() => {
+    note.timer = null;
+    send(note, () => db.from('notes').upsert(rowOf(note)));
+  }, SAVE_DELAY);
+}
+
+// Requests for one note go out one at a time, in order.
+function send(note, request) {
+  note.sending = (note.sending || 0) + 1;
+  note.queue = (note.queue || Promise.resolve())
+    .then(request)
+    .then(({ error }) => {
+      if (error) throw error;
+    })
+    .catch((e) => console.error('Sync failed:', e.message))
+    .finally(() => note.sending--);
+}
+
+// A row from the database: a new note, a change made on another device, or an
+// echo of a save from here. Echoes, and rows for notes with changes still
+// being saved here, are ignored. Returns the note if it changed.
+function applyRow(row) {
+  if (deleted.has(row.id)) return null;
+  let note = notes.find((n) => n.id === row.id);
+  if (note && (unsaved(note) || JSON.stringify(rowOf(note)) === JSON.stringify(rowOf(row)))) return null;
+  if (!note) notes.push((note = {}));
+  Object.assign(note, rowOf(row));
+  topZ = Math.max(topZ, note.z);
+  return note;
+}
+
+// Shows a note that changed (or was deleted) on another device, leaving the
+// rest of the view alone, so a note being edited here keeps its cursor.
+function showChange(note, gone) {
+  if (!loaded) return;
+  if (view() === 'widget') return showHome();
+  if (view() === 'iphone') {
+    if (!cardScreen.hidden && cardNote === note) return gone ? showList() : openCard(note);
+    if (!listScreen.hidden) showList();
+    return;
+  }
+  const old = onCanvas(note) && note.el;
+  if (!gone) {
+    if (note.x === null) {
+      Object.assign(note, findSpot());
+      save(note);
+    }
+    noteEl(note);
+  }
+  if (old) old.remove();
+}
+
+// Loads every note; again each time Realtime (re)connects, e.g. after the Mac
+// wakes from sleep, to catch up on changes missed while disconnected.
+async function load() {
+  const { data, error } = await db.from('notes').select().order('created_at');
+  if (error) return console.error('Sync failed:', error.message);
+  const ids = new Set(data.map((row) => row.id));
+  const changed = data.map(applyRow).filter(Boolean);
+  const gone = notes.filter((n) => !ids.has(n.id) && !unsaved(n));
+  gone.forEach((n) => notes.splice(notes.indexOf(n), 1));
+  if (!loaded) {
+    loaded = true;
+    return route();
+  }
+  changed.forEach((n) => showChange(n));
+  gone.forEach((n) => showChange(n, true));
+}
+
+db.channel('notes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, ({ eventType, new: row, old }) => {
+    if (eventType !== 'DELETE') {
+      const note = applyRow(row);
+      if (note) showChange(note);
+      return;
+    }
+    const note = notes.find((n) => n.id === old.id);
+    if (!note) return;
+    notes.splice(notes.indexOf(note), 1);
+    showChange(note, true);
+  })
+  .subscribe((status) => status === 'SUBSCRIBED' && load());
+
 // --- Prototype switch between the Mac, iPhone and widget views (same notes) ---
 
 const macView = document.getElementById('mac-view');
@@ -760,4 +896,4 @@ function route() {
   render();
 }
 addEventListener('hashchange', route);
-route();
+load();
