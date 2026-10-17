@@ -7,9 +7,40 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="canvas"></main>
-  <button id="theme" class="theme" aria-label="Toggle light/dark mode"></button>
-  <button id="add" class="add" aria-label="Add note"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <!-- Prototype-only controls, not part of the app. -->
+  <nav class="proto">
+    <a href="#mac">Mac</a>
+    <a href="#iphone">iPhone</a>
+  </nav>
+
+  <!-- Mac: free-form canvas -->
+  <div id="mac-view">
+    <main id="canvas"></main>
+    <button id="theme" class="theme" aria-label="Toggle light/dark mode"></button>
+    <button id="add" class="add" aria-label="Add note"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+
+  <!-- iPhone SE (2020) screen: 375×667pt -->
+  <div id="phone-view" class="stage" hidden>
+    <div class="phone">
+      <section id="list" class="list-screen">
+        <div id="cards" class="cards"></div>
+      </section>
+      <button id="phone-add" class="add" aria-label="Add note"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+
+      <section id="card" class="card-screen" hidden>
+        <header><button id="back" class="back" aria-label="Back"></button></header>
+        <div id="card-editor" class="editor"></div>
+      </section>
+
+      <!-- Long-press menu on a card -->
+      <div id="scrim" class="scrim" hidden></div>
+      <div id="menu" class="menu" hidden>
+        <button id="menu-delete" class="danger"></button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

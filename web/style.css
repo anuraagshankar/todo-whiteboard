@@ -6,6 +6,9 @@
   --shadow: rgba(0, 0, 0, 0.08);
   --text: #1d1d1f;
   --muted: #86868b;
+  --danger: #ff3b30;
+  --stage: #e5e5ea;
+  --proto-h: 36px;
   font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -17,10 +20,13 @@
   --shadow: rgba(0, 0, 0, 0.4);
   --text: #f5f5f7;
   --muted: #98989d;
+  --danger: #ff453a;
+  --stage: #000000;
 }
 
 * { box-sizing: border-box; margin: 0; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+[hidden] { display: none !important; }
 
 body {
   height: 100vh;
@@ -29,12 +35,35 @@ body {
   color: var(--text);
 }
 
+/* Prototype chrome */
+.proto {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--proto-h);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 13px;
+  background: var(--note);
+  border-bottom: 1px solid var(--note-border);
+}
+.proto a { color: var(--muted); text-decoration: none; }
+.proto a.on { color: var(--text); }
+
 #canvas {
   position: fixed;
-  inset: 0;
+  inset: var(--proto-h) 0 0;
   background-image: radial-gradient(var(--dot) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* Note editor: title, rule, body, rule, footer. Shared by the Mac note and
+   the iPhone card screen. */
+.editor { display: flex; flex-direction: column; }
 
 .note {
   position: absolute;
@@ -46,8 +75,6 @@ body {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
-  display: flex;
-  flex-direction: column;
   max-height: 75vh; /* grows with content up to here, then the body scrolls */
   padding: 10px 12px 8px;
 }
@@ -67,7 +94,7 @@ body {
 .handle.nw { top: -5px; left: -5px; cursor: nwse-resize; }
 .handle.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
 
-.note .title, .note .text, .note textarea {
+.editor .title, .editor .text, .editor textarea {
   font: inherit;
   color: inherit;
   background: none;
@@ -77,10 +104,10 @@ body {
   -webkit-user-select: text;
   user-select: text;
 }
-.note .title { font-size: 17px; font-weight: 600; padding: 2px 0; }
-.note .title::placeholder { color: var(--muted); }
-.note hr { border: 0; border-top: 1px solid var(--note-border); margin: 8px 0; }
-.note .body {
+.editor .title { font-size: 17px; font-weight: 600; padding: 2px 0; }
+.editor .title::placeholder { color: var(--muted); }
+.editor hr, .card hr { border: 0; border-top: 1px solid var(--note-border); margin: 8px 0; }
+.editor .body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -89,8 +116,8 @@ body {
   flex-direction: column;
 }
 /* Height is set from its content in JS; flex-grow fills a short note. */
-.note textarea { display: block; resize: none; overflow: hidden; line-height: 1.4; }
-.note .body > textarea { width: 100%; flex: 1 0 auto; tab-size: 4; }
+.editor textarea { display: block; resize: none; overflow: hidden; line-height: 1.4; }
+.editor .body > textarea { width: 100%; flex: 1 0 auto; tab-size: 4; }
 
 .item { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 .item.sub { padding-left: 22px; }
@@ -110,10 +137,10 @@ body {
 .item .remove:hover { color: var(--text); }
 .item .remove svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .item.done .text { color: var(--muted); text-decoration: line-through; }
-.note footer, .note footer .left { display: flex; justify-content: space-between; gap: 6px; }
-.note footer button { color: var(--muted); padding: 2px; border-radius: 4px; }
-.note footer button:hover { color: var(--text); }
-.note footer svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.editor footer, .editor footer .left { display: flex; justify-content: space-between; gap: 6px; }
+.editor footer button { color: var(--muted); padding: 2px; border-radius: 4px; }
+.editor footer button:hover { color: var(--text); }
+.editor footer svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Floating buttons: same surface as the notes, so they follow the theme. */
 .theme, .add {
@@ -127,8 +154,75 @@ body {
 }
 .theme svg, .add svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
 
-.theme { top: 16px; right: 16px; width: 36px; height: 36px; }
+.theme { top: calc(var(--proto-h) + 16px); right: 16px; width: 36px; height: 36px; }
 .theme svg { width: 18px; height: 18px; stroke-width: 1.8; }
 
 .add { right: 24px; bottom: 24px; width: 48px; height: 48px; }
 .add svg { width: 22px; height: 22px; stroke-width: 2.2; }
+
+/* iPhone mockup */
+.stage {
+  position: fixed;
+  inset: var(--proto-h) 0 0;
+  background: var(--stage);
+  display: grid;
+  place-items: center;
+}
+.phone {
+  position: relative;
+  width: 375px;
+  height: 667px;
+  overflow: hidden;
+  background: var(--bg);
+  outline: 1px solid var(--note-border);
+}
+.phone .add { position: absolute; right: 16px; bottom: 16px; }
+
+/* Home: one card per row. 20px top = status bar; bottom padding keeps the
+   last card clear of the + button. */
+.list-screen {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 16px 80px;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-attachment: local; /* dots scroll with the cards */
+}
+.cards { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+.card {
+  background: var(--note);
+  border: 1px solid var(--note-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.card .title { font-size: 17px; font-weight: 600; }
+.card .title.empty { color: var(--muted); }
+.card .line, .card .text { white-space: pre; overflow: hidden; text-overflow: ellipsis; tab-size: 4; }
+.card .item { padding: 1px 0; }
+
+/* Card screen: the full note editor. */
+.card-screen { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; padding-top: 20px; }
+.card-screen header { padding: 6px 8px 0; }
+.back { display: grid; place-items: center; width: 36px; height: 36px; }
+.back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.card-screen .editor { flex: 1; min-height: 0; padding: 4px 16px 12px; }
+
+.scrim { position: absolute; inset: 0; }
+.menu {
+  position: absolute;
+  min-width: 180px;
+  background: var(--note);
+  border: 1px solid var(--note-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px var(--shadow);
+  overflow: hidden;
+}
+.menu button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 11px 16px; font-size: 15px; }
+.menu .danger { color: var(--danger); }
+.menu svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

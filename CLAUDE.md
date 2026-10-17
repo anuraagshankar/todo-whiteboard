@@ -9,7 +9,7 @@ Personal whiteboard-style notes and todo app: a free-form canvas where I place a
 
 ## Constraints
 - iPhone is an SE 2020 (old, low-end). The iPhone app and widget must be lightweight, fast and minimal: no unnecessary dependencies, animations or features.
-- Sync via iCloud (SwiftData + CloudKit). No custom backend or login.
+- Sync via Supabase (free plan): the web app and the Apple apps all read and write the same Supabase database. No custom backend of our own.
 
 ## Structure
 - `web/`: prototype for iterating on UI/UX on my Mac, including mockups of the iPhone app and widget. Performance doesn't matter here; speed of iteration does.

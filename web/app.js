@@ -10,6 +10,7 @@ const ICONS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   tick: '<path d="M6 12.5l4 4 8-9"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
   broom:
     '<path d="M18 2l-3.4 7.5M11.4 11.4c.3-1.6 1.7-2.4 3.1-2s2.1 1.9 1.5 3.4zM13.4 13c-1 2.1-1.8 4.6-1.9 7.2"/>' +
     '<path d="M11.4 11.4C9.2 13.6 7.4 16.6 6.4 20.2q1.4-1.2 2.6.4 1.1-1.6 2.5.3 1.1-1.6 2.5 0 1.1-1.4 2.6-.6C16.9 17.2 16.6 15 16 12.8"/>',
@@ -26,38 +27,17 @@ function setTheme(theme) {
 setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 themeBtn.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
 
-// Notes
+// Notes, shared by the Mac and iPhone views. Each note is
+// { title, mode, text, items, x, y, w, h, z }: x/y are null until it is first
+// placed on the Mac canvas, h is null while it grows with its content.
+// note.el (and modeBtn/clearBtn) point at whichever editor is showing it.
 const NOTE_W = 284; // includes the column reserved for item delete buttons
 const NOTE_H = 160; // starting (minimum) height; notes grow with content up to 75% of the page height
 const GAP = 16; // minimum space kept between a new note and existing ones
 const STEP = 24; // grid the empty-space search walks, matches the dot grid
-const notes = []; // { el, x, y }
+const notes = [];
 
-// Would a new note at x, y overlap note n (at n's current size)?
-const overlaps = (x, y, n) =>
-  x < n.x + n.el.offsetWidth + GAP &&
-  x + NOTE_W + GAP > n.x &&
-  y < n.y + n.el.offsetHeight + GAP &&
-  y + NOTE_H + GAP > n.y;
-
-// First free spot scanning rows from the top-left of the visible canvas.
-// If the canvas is full, falls back to a cascade from the top-left.
-function findSpot() {
-  const maxX = canvas.clientWidth - NOTE_W - STEP;
-  const maxY = canvas.clientHeight - NOTE_H - STEP;
-  for (let y = STEP; y <= maxY; y += STEP) {
-    for (let x = STEP; x <= maxX; x += STEP) {
-      if (!notes.some((n) => overlaps(x, y, n))) return { x, y };
-    }
-  }
-  const offset = STEP + (notes.length % 10) * STEP;
-  return { x: offset, y: offset };
-}
-
-function place(note) {
-  note.el.style.left = `${note.x}px`;
-  note.el.style.top = `${note.y}px`;
-}
+const newNote = () => ({ title: '', mode: 'text', text: '', items: [], x: null, y: null, w: NOTE_W, h: null, z: 0 });
 
 // Mode button shows the note's current mode.
 const MODES = {
@@ -65,13 +45,44 @@ const MODES = {
   checklist: { icon: 'checklist', label: 'Checkbox mode (click for plain text)', next: 'text' },
 };
 
+const EDITOR_HTML = `
+  <input class="title" placeholder="Title" aria-label="Title">
+  <hr>
+  <div class="body"></div>
+  <hr>
+  <footer>
+    <div class="left">
+      <button class="mode"></button>
+      <button class="clear-done" title="Delete marked items" aria-label="Delete marked items">${svg('broom')}</button>
+    </div>
+    <button class="trash" title="Delete note" aria-label="Delete note">${svg('trash')}</button>
+  </footer>`;
+
+// Wires the editor markup inside el to note.
+function mountEditor(note, el) {
+  note.el = el;
+  note.modeBtn = el.querySelector('.mode');
+  note.clearBtn = el.querySelector('.clear-done');
+  const title = el.querySelector('.title');
+  title.value = note.title;
+  title.addEventListener('input', () => (note.title = title.value));
+  note.modeBtn.addEventListener('click', () => setMode(note, MODES[note.mode].next));
+  note.clearBtn.addEventListener('click', () => clearDone(note));
+  el.querySelector('.trash').addEventListener('click', () => deleteNote(note));
+  showMode(note);
+}
+
 function setMode(note, mode) {
   if (note.mode === 'checklist' && mode === 'text') note.text = itemsToText(note.items);
   if (note.mode === 'text' && mode === 'checklist') note.items = textToItems(note.text);
   note.mode = mode;
-  note.modeBtn.innerHTML = svg(MODES[mode].icon);
-  note.modeBtn.title = MODES[mode].label;
-  note.clearBtn.hidden = mode !== 'checklist';
+  showMode(note);
+}
+
+function showMode(note) {
+  note.modeBtn.innerHTML = svg(MODES[note.mode].icon);
+  note.modeBtn.title = MODES[note.mode].label;
+  note.clearBtn.hidden = note.mode !== 'checklist';
   renderBody(note);
 }
 
@@ -305,47 +316,79 @@ function clearDone(note) {
   renderBody(note);
 }
 
-function addNote() {
+function deleteNote(note) {
+  if (!confirm('Delete this note?')) return;
+  removeNote(note);
+}
+
+function removeNote(note) {
+  notes.splice(notes.indexOf(note), 1);
+  render();
+}
+
+// --- Mac: free-form canvas ---
+
+const onCanvas = (n) => n.el?.parentElement === canvas;
+
+// Would a new note at x, y overlap note n (at n's current size)?
+const overlaps = (x, y, n) =>
+  x < n.x + n.el.offsetWidth + GAP &&
+  x + NOTE_W + GAP > n.x &&
+  y < n.y + n.el.offsetHeight + GAP &&
+  y + NOTE_H + GAP > n.y;
+
+// First free spot scanning rows from the top-left of the visible canvas.
+// If the canvas is full, falls back to a cascade from the top-left.
+function findSpot() {
+  const placed = notes.filter(onCanvas);
+  const maxX = canvas.clientWidth - NOTE_W - STEP;
+  const maxY = canvas.clientHeight - NOTE_H - STEP;
+  for (let y = STEP; y <= maxY; y += STEP) {
+    for (let x = STEP; x <= maxX; x += STEP) {
+      if (!placed.some((n) => overlaps(x, y, n))) return { x, y };
+    }
+  }
+  const offset = STEP + (placed.length % 10) * STEP;
+  return { x: offset, y: offset };
+}
+
+// Notes added on the iPhone have no position yet: they get the first free
+// spot once everything already placed is on the canvas.
+function renderCanvas() {
+  canvas.replaceChildren();
+  notes.filter((n) => n.x !== null).forEach(noteEl);
+  notes.filter((n) => n.x === null).forEach((n) => {
+    Object.assign(n, findSpot());
+    noteEl(n);
+  });
+}
+
+function noteEl(note) {
   const el = document.createElement('div');
-  el.className = 'note';
-  el.style.width = `${NOTE_W}px`;
-  el.style.minHeight = `${NOTE_H}px`;
-  el.innerHTML = `
-    <input class="title" placeholder="Title" aria-label="Title">
-    <hr>
-    <div class="body"></div>
-    <hr>
-    <footer>
-      <div class="left">
-        <button class="mode"></button>
-        <button class="clear-done" title="Delete marked items" aria-label="Delete marked items">${svg('broom')}</button>
-      </div>
-      <button class="trash" title="Delete note" aria-label="Delete note">${svg('trash')}</button>
-    </footer>
-    ${EDGES.map((dir) => `<div class="handle ${dir}" data-dir="${dir}"></div>`).join('')}`;
-  const note = {
-    el,
-    modeBtn: el.querySelector('.mode'),
-    clearBtn: el.querySelector('.clear-done'),
-    text: '',
-    items: [],
-    ...findSpot(),
-  };
-  setMode(note, 'text');
-  note.modeBtn.addEventListener('click', () => setMode(note, MODES[note.mode].next));
-  note.clearBtn.addEventListener('click', () => clearDone(note));
-  el.querySelector('.trash').addEventListener('click', () => deleteNote(note));
-  notes.push(note);
-  place(note);
+  el.className = 'note editor';
+  el.innerHTML = EDITOR_HTML + EDGES.map((dir) => `<div class="handle ${dir}" data-dir="${dir}"></div>`).join('');
   canvas.append(el);
+  mountEditor(note, el);
+  layout(note);
   makeDraggable(note);
   makeResizable(note);
 }
 
-function deleteNote(note) {
-  if (!confirm('Delete this note?')) return;
-  note.el.remove();
-  notes.splice(notes.indexOf(note), 1);
+function layout(note) {
+  const s = note.el.style;
+  s.left = `${note.x}px`;
+  s.top = `${note.y}px`;
+  s.width = `${note.w}px`;
+  s.minHeight = `${NOTE_H}px`;
+  s.height = note.h ? `${note.h}px` : '';
+  s.maxHeight = note.h ? 'none' : '';
+  s.zIndex = note.z || '';
+}
+
+function addNote() {
+  const note = { ...newNote(), ...findSpot() };
+  notes.push(note);
+  noteEl(note);
 }
 
 let topZ = 0;
@@ -359,14 +402,15 @@ function makeDraggable(note) {
     const dy = e.clientY - note.y;
     // Bring to front with z-index, not by moving the element in the DOM:
     // a DOM move drops the pointer capture (see CORRECTIONS.md 1-2).
-    el.style.zIndex = ++topZ;
+    note.z = ++topZ;
+    layout(note);
     el.setPointerCapture(e.pointerId);
     el.classList.add('dragging');
 
     const move = (e) => {
       note.x = Math.min(Math.max(e.clientX - dx, 0), canvas.clientWidth - el.offsetWidth);
       note.y = Math.min(Math.max(e.clientY - dy, 0), canvas.clientHeight - el.offsetHeight);
-      place(note);
+      layout(note);
     };
     const up = () => {
       el.classList.remove('dragging');
@@ -396,33 +440,31 @@ function makeResizable(note) {
     handle.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       const start = { px: e.clientX, py: e.clientY, x: note.x, y: note.y, w: el.offsetWidth, h: el.offsetHeight };
-      el.style.zIndex = ++topZ;
+      note.z = ++topZ;
+      layout(note);
       handle.setPointerCapture(e.pointerId);
 
       const move = (e) => {
         const dx = e.clientX - start.px;
         const dy = e.clientY - start.py;
         if (dir.includes('e')) {
-          el.style.width = `${clamp(start.w + dx, NOTE_W, canvas.clientWidth - start.x)}px`;
+          note.w = clamp(start.w + dx, NOTE_W, canvas.clientWidth - start.x);
         } else if (dir.includes('w')) {
-          const w = clamp(start.w - dx, NOTE_W, start.x + start.w);
-          el.style.width = `${w}px`;
-          note.x = start.x + start.w - w;
+          note.w = clamp(start.w - dx, NOTE_W, start.x + start.w);
+          note.x = start.x + start.w - note.w;
         }
         if (dir.includes('s') || dir.includes('n')) {
-          const h = dir.includes('s')
+          note.h = dir.includes('s')
             ? clamp(start.h + dy, NOTE_H, canvas.clientHeight - start.y)
             : clamp(start.h - dy, NOTE_H, start.y + start.h);
-          el.style.height = `${h}px`;
-          el.style.maxHeight = 'none';
-          if (dir.includes('n')) note.y = start.y + start.h - h;
+          if (dir.includes('n')) note.y = start.y + start.h - note.h;
         }
-        place(note);
+        layout(note);
       };
       const up = () => {
-        if (parseFloat(el.style.height) <= NOTE_H) {
-          el.style.height = '';
-          el.style.maxHeight = '';
+        if (note.h && note.h <= NOTE_H) {
+          note.h = null;
+          layout(note);
         }
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
@@ -438,3 +480,137 @@ function makeResizable(note) {
 }
 
 addBtn.addEventListener('click', addNote);
+
+// --- iPhone: list of cards, tap one to open it full screen ---
+
+const listScreen = document.getElementById('list');
+const cardsEl = document.getElementById('cards');
+const cardScreen = document.getElementById('card');
+const cardEditor = document.getElementById('card-editor');
+const phoneAdd = document.getElementById('phone-add');
+const scrim = document.getElementById('scrim');
+const menu = document.getElementById('menu');
+const menuDelete = document.getElementById('menu-delete');
+const PREVIEW = 5; // items (or lines) shown on a card
+const LONG_PRESS = 500; // ms
+
+document.getElementById('back').innerHTML = svg('back');
+document.getElementById('back').addEventListener('click', showList);
+menuDelete.innerHTML = `Delete ${svg('trash')}`;
+
+function showList() {
+  closeMenu();
+  cardScreen.hidden = true;
+  listScreen.hidden = false;
+  phoneAdd.hidden = false;
+  cardsEl.replaceChildren(...notes.map(cardEl));
+}
+
+function openCard(note) {
+  listScreen.hidden = true;
+  phoneAdd.hidden = true;
+  cardScreen.hidden = false;
+  cardEditor.innerHTML = EDITOR_HTML;
+  mountEditor(note, cardEditor);
+}
+
+// View-only card: title and a preview of the first 5 lines (plain text, blank
+// lines skipped) or the first 5 unmarked items (checkbox mode).
+function cardEl(note) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const title = document.createElement('div');
+  title.className = `title${note.title ? '' : ' empty'}`;
+  title.textContent = note.title || 'Title';
+  card.append(title);
+
+  const preview = [];
+  if (note.mode === 'text') {
+    for (const line of note.text.split('\n').filter((l) => l.trim()).slice(0, PREVIEW)) {
+      const row = document.createElement('div');
+      row.className = 'line';
+      row.textContent = line;
+      preview.push(row);
+    }
+  } else {
+    note.items.forEach((it, i) => {
+      if (it.done || !it.text.trim() || preview.length === PREVIEW) return;
+      const row = document.createElement('div');
+      row.className = `item${isNested(note.items, i) ? ' sub' : ''}`;
+      row.innerHTML = '<span class="box"></span><span class="text"></span>';
+      row.querySelector('.text').textContent = it.text;
+      preview.push(row);
+    });
+  }
+  if (preview.length) card.append(document.createElement('hr'), ...preview);
+
+  // Tap opens the card; press and hold opens the menu instead.
+  let timer;
+  let held = false;
+  let start;
+  card.addEventListener('pointerdown', (e) => {
+    held = false;
+    start = { x: e.clientX, y: e.clientY };
+    timer = setTimeout(() => {
+      held = true;
+      openMenu(note, card);
+    }, LONG_PRESS);
+  });
+  card.addEventListener('pointermove', (e) => {
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clearTimeout(timer);
+  });
+  for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+    card.addEventListener(type, () => clearTimeout(timer));
+  }
+  card.addEventListener('click', () => {
+    if (!held) openCard(note);
+  });
+  card.addEventListener('contextmenu', (e) => e.preventDefault());
+  return card;
+}
+
+// Menu under the card (above it if there's no room below). Delete here is
+// immediate: the long press and menu are already the deliberate step.
+function openMenu(note, card) {
+  const phone = card.closest('.phone').getBoundingClientRect();
+  const c = card.getBoundingClientRect();
+  scrim.hidden = false;
+  menu.hidden = false;
+  const below = c.bottom - phone.top + 6;
+  menu.style.top = `${below + menu.offsetHeight > phone.height ? c.top - phone.top - 6 - menu.offsetHeight : below}px`;
+  menu.style.right = `${phone.right - c.right}px`;
+  menuDelete.onclick = () => removeNote(note);
+}
+
+function closeMenu() {
+  scrim.hidden = true;
+  menu.hidden = true;
+}
+scrim.addEventListener('pointerdown', closeMenu);
+
+phoneAdd.addEventListener('click', () => {
+  const note = newNote();
+  notes.push(note);
+  openCard(note);
+  cardEditor.querySelector('.title').focus();
+});
+
+// --- Prototype switch between the Mac and iPhone views (same notes) ---
+
+const macView = document.getElementById('mac-view');
+const phoneView = document.getElementById('phone-view');
+const isPhone = () => location.hash === '#iphone';
+
+function render() {
+  if (isPhone()) showList();
+  else renderCanvas();
+}
+
+function route() {
+  macView.hidden = isPhone();
+  phoneView.hidden = !isPhone();
+  document.querySelectorAll('.proto a').forEach((a) => a.classList.toggle('on', a.hash === (isPhone() ? '#iphone' : '#mac')));
+  render();
+}
+addEventListener('hashchange', route);
+route();
