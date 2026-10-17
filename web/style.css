@@ -2,12 +2,15 @@
   --bg: #f5f5f7;
   --dot: #d2d2d7;
   --note: #ffffff;
+  --card: rgba(255, 255, 255, 0.5); /* todo cards: --note at 50%, so the dots show through */
   --note-border: #d2d2d7;
   --shadow: rgba(0, 0, 0, 0.08);
   --text: #1d1d1f;
   --muted: #86868b;
   --danger: #ff3b30;
   --stage: #e5e5ea;
+  --wallpaper: #c9d3e3;
+  --pill: #efeff4;
   --proto-h: 36px;
   font-family: -apple-system, system-ui, "SF Pro Text", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -16,12 +19,15 @@
   --bg: #1c1c1e;
   --dot: #3a3a3c;
   --note: #2c2c2e;
+  --card: rgba(44, 44, 46, 0.5);
   --note-border: #3a3a3c;
   --shadow: rgba(0, 0, 0, 0.4);
   --text: #f5f5f7;
   --muted: #98989d;
   --danger: #ff453a;
   --stage: #000000;
+  --wallpaper: #101820;
+  --pill: #3a3a3c;
 }
 
 * { box-sizing: border-box; margin: 0; }
@@ -67,7 +73,7 @@ body {
 
 .note {
   position: absolute;
-  background: var(--note);
+  background: var(--card);
   border: 1px solid var(--note-border);
   border-radius: 8px;
   box-shadow: 0 2px 8px var(--shadow);
@@ -213,7 +219,7 @@ body {
 }
 .cards { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
 .card {
-  background: var(--note);
+  background: var(--card);
   border: 1px solid var(--note-border);
   border-radius: 8px;
   padding: 10px 12px;
@@ -249,3 +255,76 @@ body {
 .menu button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 11px 16px; font-size: 15px; }
 .menu .danger { color: var(--danger); }
 .menu svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Home Screen + large widget: up to 4 checkbox lists as cards in a 2×2 grid on
+   a dotted background, their unmarked top-level items as one pill per row. */
+.home {
+  position: absolute;
+  inset: 0;
+  background: var(--wallpaper);
+  padding: 40px 27px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.widget {
+  width: 321px;
+  height: 338px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.widget.has-more { grid-template-rows: 1fr 1fr auto; }
+.widget-card {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--note-border);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+.widget-card .head { flex: none; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.widget-card .title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.widget-card .count {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--pill);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+.widget-card .title.empty { color: var(--muted); }
+.pill {
+  flex: none;
+  background: var(--pill);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* long items are cut to the pill width */
+}
+.widget-more { color: var(--muted); font-size: 12px; padding-left: 9px; }
+.widget-more { grid-column: 1 / -1; }
+.widget-empty { grid-column: 1 / -1; grid-row: 1 / -1; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.widget-empty b { color: var(--text); font-size: 17px; font-weight: 600; }
+.widget-name { margin-top: 6px; font-size: 12px; color: var(--text); }

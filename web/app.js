@@ -668,21 +668,95 @@ phoneAdd.addEventListener('click', () => {
   cardEditor.querySelector('.title').focus();
 });
 
-// --- Prototype switch between the Mac and iPhone views (same notes) ---
+// --- iPhone Home Screen widget (large) ---
+// Up to WIDGET_LISTS checkbox lists, as cards in a 2×2 grid on a dotted
+// background: each card has its title, then its unmarked top-level items as
+// one pill per row, as many as fit in the card (long items are cut to the
+// pill width). A round badge right of the title counts all those items. Sub-items, plain text notes and
+// lists with nothing left to do are left out; lists past the first 4 become
+// "+N more lists". Tapping a card opens that note.
+
+const homeScreen = document.getElementById('home');
+const widget = document.getElementById('widget');
+const WIDGET_LISTS = 4; // 2×2 grid
+let openOnLaunch = null; // note to open when the app comes up from the widget
+
+function showHome() {
+  closeMenu();
+  listScreen.hidden = true;
+  cardScreen.hidden = true;
+  phoneAdd.hidden = true;
+  const cards = notes.filter((n) => n.mode === 'checklist').map(widgetCard).filter(Boolean);
+  const shown = cards.slice(0, WIDGET_LISTS);
+  const hidden = cards.length - shown.length;
+  widget.replaceChildren(...shown.map((c) => c.el));
+  widget.classList.toggle('has-more', hidden > 0);
+  if (hidden) {
+    const more = document.createElement('div');
+    more.className = 'widget-more';
+    more.textContent = `+${hidden} more list${hidden === 1 ? '' : 's'}`;
+    widget.append(more);
+  }
+  if (!cards.length) widget.innerHTML = '<div class="widget-empty"><div><b>All done!</b><br>Nothing left on your lists.</div></div>';
+  for (const c of shown) while (c.shown > 1 && c.el.scrollHeight > c.el.clientHeight) c.show(c.shown - 1);
+}
+
+function widgetCard(note) {
+  const todo = note.items.filter((it, i) => !it.done && it.text.trim() && !isNested(note.items, i));
+  if (!todo.length) return null;
+  const el = document.createElement('div');
+  el.className = 'widget-card';
+  el.addEventListener('click', () => {
+    openOnLaunch = note;
+    location.hash = '#iphone';
+  });
+  // Shows the title with a count of its items, then the first n pills.
+  const card = {
+    el,
+    shown: 0,
+    show(n) {
+      card.shown = n;
+      const head = document.createElement('div');
+      head.className = 'head';
+      const title = document.createElement('div');
+      title.className = `title${note.title ? '' : ' empty'}`;
+      title.textContent = note.title || 'Title';
+      const count = document.createElement('div');
+      count.className = 'count';
+      count.textContent = todo.length;
+      head.append(title, count);
+      const pills = todo.slice(0, n).map((it) => {
+        const pill = document.createElement('div');
+        pill.className = 'pill';
+        pill.textContent = it.text;
+        return pill;
+      });
+      el.replaceChildren(head, ...pills);
+    },
+  };
+  card.show(todo.length); // showHome then drops pills until the card fits
+  return card;
+}
+
+// --- Prototype switch between the Mac, iPhone and widget views (same notes) ---
 
 const macView = document.getElementById('mac-view');
 const phoneView = document.getElementById('phone-view');
-const isPhone = () => location.hash === '#iphone';
+const view = () => ({ '#iphone': 'iphone', '#widget': 'widget' })[location.hash] || 'mac';
 
 function render() {
-  if (isPhone()) showList();
-  else renderCanvas();
+  if (view() === 'mac') return renderCanvas();
+  if (view() === 'widget') return showHome();
+  showList();
+  if (openOnLaunch) openCard(openOnLaunch);
+  openOnLaunch = null;
 }
 
 function route() {
-  macView.hidden = isPhone();
-  phoneView.hidden = !isPhone();
-  document.querySelectorAll('.proto a').forEach((a) => a.classList.toggle('on', a.hash === (isPhone() ? '#iphone' : '#mac')));
+  macView.hidden = view() !== 'mac';
+  phoneView.hidden = view() === 'mac';
+  homeScreen.hidden = view() !== 'widget';
+  document.querySelectorAll('.proto a').forEach((a) => a.classList.toggle('on', a.hash === `#${view()}`));
   render();
 }
 addEventListener('hashchange', route);

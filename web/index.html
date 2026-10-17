@@ -11,6 +11,7 @@
   <nav class="proto">
     <a href="#mac">Mac</a>
     <a href="#iphone">iPhone</a>
+    <a href="#widget">Widget</a>
   </nav>
 
   <!-- Mac: free-form canvas -->
@@ -31,6 +32,12 @@
       <section id="card" class="card-screen" hidden>
         <header><button id="back" class="back" aria-label="Back"></button></header>
         <div id="card-editor" class="editor"></div>
+      </section>
+
+      <!-- Home Screen with the large widget (iPhone SE: 321×338pt) -->
+      <section id="home" class="home" hidden>
+        <div id="widget" class="widget"></div>
+        <div class="widget-name">Whiteboard Todos</div>
       </section>
 
       <!-- Long-press menu on a card -->
