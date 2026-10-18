@@ -6,9 +6,9 @@ nonisolated enum Supabase {
     static let host = "pgwitomfqzskpilqiklr.supabase.co"
     static let key = "sb_publishable_72x2Nmm-9RHHzrm956unPA_jgDc-F3o"
 
-    // Notes in list order (oldest first); `filter` narrows them, e.g. "mode=eq.checklist".
+    // Notes in list order; `filter` narrows them, e.g. "mode=eq.checklist".
     static func notes(filter: String = "") async throws -> [Note] {
-        let data = try await send("notes?select=*&order=created_at" + (filter.isEmpty ? "" : "&" + filter))
+        let data = try await send("notes?select=*&order=position" + (filter.isEmpty ? "" : "&" + filter))
         return try JSONDecoder().decode([Note].self, from: data)
     }
 

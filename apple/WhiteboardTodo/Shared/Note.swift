@@ -2,7 +2,9 @@ import Foundation
 
 // A note: one row of the Supabase `notes` table (supabase/schema.sql), shared by the
 // Mac app, the iPhone app and the widget. x/y are nil until it is first placed on the
-// Mac canvas; h is nil while it grows with its content.
+// Mac canvas; h is nil while it grows with its content. position orders the iPhone list
+// and the widget: new notes go last (seconds since 1970); a moved note gets a value
+// between its new neighbours.
 nonisolated struct Note: Codable, Identifiable, Equatable {
     enum Mode: String, Codable { case text, checklist }
 
@@ -16,11 +18,12 @@ nonisolated struct Note: Codable, Identifiable, Equatable {
     var w = Note.width
     var h: Double?
     var z = 0
+    var position = Date().timeIntervalSince1970
 
     static let width = 288.0 // includes the column reserved for item delete buttons
     static let height = 160.0 // starting (minimum) height on the Mac canvas
 
-    private enum CodingKeys: CodingKey { case id, title, mode, text, items, x, y, w, h, z }
+    private enum CodingKeys: CodingKey { case id, title, mode, text, items, x, y, w, h, z, position }
 
     // Optional fields are sent as null, so clearing h saves too.
     func encode(to encoder: Encoder) throws {
@@ -35,6 +38,7 @@ nonisolated struct Note: Codable, Identifiable, Equatable {
         try c.encode(w, forKey: .w)
         try c.encode(h, forKey: .h)
         try c.encode(z, forKey: .z)
+        try c.encode(position, forKey: .position)
     }
 }
 

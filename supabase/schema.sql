@@ -12,7 +12,8 @@ create table notes (
   w double precision not null default 288,
   h double precision, -- null while the note grows with its content
   z integer not null default 0,
-  created_at timestamptz not null default now() -- list order
+  position double precision not null default extract(epoch from now()), -- list order on the iPhone and widget
+  created_at timestamptz not null default now()
 );
 
 alter table notes enable row level security;

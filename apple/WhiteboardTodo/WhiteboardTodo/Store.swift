@@ -44,6 +44,24 @@ import WidgetKit
         send(id) { try await Supabase.delete(id) }
     }
 
+    // Notes in list order (iPhone list and widget).
+    var ordered: [Note] { notes.sorted { $0.position < $1.position } }
+
+    // Moves a note to `index` in list order (counted without it); saved with save().
+    func move(_ id: UUID, to index: Int) {
+        let others = ordered.filter { $0.id != id }
+        let before = index > 0 ? others[index - 1].position : nil
+        let after = index < others.count ? others[index].position : nil
+        let position: Double
+        switch (before, after) {
+        case let (b?, a?): position = (b + a) / 2
+        case let (b?, nil): position = b + 1
+        case let (nil, a?): position = a - 1
+        default: return
+        }
+        update(id, save: false) { $0.position = position }
+    }
+
     // Brings a note to the front of the canvas (saved with the move or resize that follows).
     func raise(_ id: UUID) {
         topZ += 1
