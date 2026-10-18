@@ -1,60 +1,164 @@
-# Personal iPhone App + Widget — Reference
+# Personal iPhone App + Widget: Reference
 
-## Goal
-Build a private iPhone app with a native Home Screen/Lock Screen widget, use it indefinitely without paying for Apple Developer Program membership, and refresh it wirelessly from a Mac.
+What was actually done to get the Dual Translator app and widget onto an iPhone SE 2020 (iOS 18.4) with a **free** Apple account, and to keep it working without paying for the Apple Developer Program. Verified 2026-10-18.
 
-## Key constraints
-- Free Apple Account + Xcode can build and install an app and WidgetKit extension on a personal iPhone.
-- Free development provisioning generally expires after **7 days**; the app/widget may stop functioning until refreshed.
-- Refreshing every **2 days** is fine and provides a buffer, **provided the app is re-signed with valid renewed provisioning**. Merely reinstalling an unchanged, expiring signed build does not reset validity.
-- This is not a truly permanent installation: periodic provisioning and occasional manual intervention remain possible.
-- Paid Apple Developer Program membership costs about **US$99/year** and enables distribution options, but development-installed builds also have provisioning limits.
+## Key facts
+- A free Apple account (Xcode "Personal Team") can build and install the app plus its WidgetKit extension on your own iPhone.
+- Its signing profiles expire **7 days** after they are issued; after that the app won't open and the widget stops working until it is re-signed and reinstalled.
+- **Rebuilding does not reset the 7 days.** Xcode keeps reusing its cached profile while it is still valid. To get a fresh 7-day profile, delete the cached profiles first (see [Renewing the 7 days](#renewing-the-7-days)).
+- Installing works **over Wi-Fi** and **while the phone is locked**. Only opening the app remotely needs it unlocked.
+- Reinstalling keeps the app's data (e.g. the last-used language), as long as the bundle IDs and team stay the same.
+- Paid membership (about US$99/year) gives longer-lived profiles. Not needed for now.
 
-## One-time setup
-1. Install Xcode; add Apple Account under Xcode Settings > Accounts.
-2. Create a SwiftUI iOS app with a WidgetKit extension. Set the same signing team for both targets, with automatic signing.
-3. Connect iPhone to Mac by USB, trust the Mac, and enable iPhone **Settings > Privacy & Security > Developer Mode**.
-4. Open Xcode > Window > Devices and Simulators; pair/enable network connection if offered. Verify iPhone appears over Wi-Fi after unplugging.
-5. Build and run once from Xcode to verify app and widget installation.
+## One-time setup (what was done)
 
-## Terminal refresh workflow
-From the project directory, discover the paired device:
+### Mac and Xcode
+1. Install Xcode. In its **Components** screen only the **iOS** platform is needed (about 16 GB; it includes the Simulator). macOS is built in; watchOS, tvOS and visionOS were skipped.
+2. **Xcode → Settings → Accounts → +** → sign in with the Apple ID. This creates the "Personal Team".
+3. `xcode-select` still points at the standalone Command Line Tools, so terminal builds need `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` in front of them. Switching it once with `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` would also work, but wasn't needed.
+
+### Project
+4. **File → New → Project → Choose Template… → iOS tab → App.** The quick list (App, Command Line Tool, Package, Playground) doesn't show the platforms; "Choose Template…" does.
+   - Product Name `DualTranslator`, Team = Personal Team, Organization Identifier `com.anuraagshankar` (bundle ID `com.anuraagshankar.DualTranslator`).
+   - Interface SwiftUI, Language Swift, Testing System None, Storage None.
+   - Saved in `apple/`, with **"Create Git repository" unchecked** (the repo already exists).
+5. **File → New → Target → iOS → Widget Extension**, named `DualTranslatorWidget`, with **Live Activity, Control and Configuration App Intent all unchecked**. Click Activate when asked.
+6. Fix the build settings Xcode got wrong for this phone (done by editing `project.pbxproj`, for both targets):
+   - `IPHONEOS_DEPLOYMENT_TARGET` 27.0 → **18.0**. Xcode defaults to the newest iOS, which shows the phone as "OS version lower than deployment target".
+   - `TARGETED_DEVICE_FAMILY` → **1** (iPhone only).
+7. App-specific settings:
+   - `DualTranslator-Info.plist` (outside the synced source folder) registers the `dualtranslator://` URL scheme that the widget links use. The app target points at it with `INFOPLIST_FILE`.
+   - `INFOPLIST_KEY_CFBundleDisplayName = Translator`, the name shown under the icon and on the widget.
+   - The DeepL key lives in `apple/DualTranslator/DualTranslator/Secrets.swift`, which is **git-ignored**. Copy it from `web/.env` on a new machine: `let deepLKey = "..."`.
+   - App icon: three 1024×1024 PNGs (default, dark, tinted) in `AppIcon.appiconset`, generated by `apple/make-icon.swift`.
+8. Xcode uses folder-synced groups, so any Swift file dropped into `DualTranslator/` or `DualTranslatorWidget/` is compiled automatically. If Xcode shows "Cannot find … in scope" right after files are added from outside, it's stale: press **⌘B**.
+
+### iPhone
+9. Connect by USB, tap **Trust** on the phone, then enable **Settings → Privacy & Security → Developer Mode** (restarts the phone; the option only appears after Xcode has seen the phone).
+10. In Xcode's top bar pick scheme **DualTranslator** (not the widget extension) and device **Anuraag's iPhone**, then **▶**.
+11. The first time, Xcode said "Build Succeeded" but nothing opened. Launching from the terminal showed the real reason: the developer profile wasn't trusted. Fix on the phone: **Settings → General → VPN & Device Management → (your Apple ID) → Trust**. Only needed once per Apple ID.
+12. Add the widget: long-press the Home Screen → **+** → "Translator" → medium size.
+13. Optional: **Settings → Apps → Translator → Paste from Other Apps → Allow** stops the "Allow Paste?" prompt when using the widget's paste icon.
+14. Unplug the cable. The phone stays reachable over Wi-Fi when on the same network as the Mac (`xcrun devicectl list devices` shows it as `connected`, transport `localNetwork`). If it ever drops off, plugging the cable in once usually brings it back.
+
+## Checklist for a new app
+How to repeat this for another app. Settings can be changed in Xcode's UI (click the blue project icon at the top of the file list, then pick a **target** in the left column), or directly in `project.pbxproj` with the build-setting key shown.
+
+### Already done, don't repeat
+These are per Mac, per phone or per Apple ID, not per app:
+- Xcode with the iOS platform installed, and signed in under Settings → Accounts.
+- Developer Mode on the phone.
+- Trusting your Apple ID under VPN & Device Management.
+- Wi-Fi pairing.
+- `DEVELOPER_DIR` for terminal builds.
+
+### Per app: creating it
+1. **Choose Template… → iOS → App**, Organization Identifier `com.anuraagshankar`, Team = Personal Team, Testing System None, Storage None. **Uncheck "Create Git repository"** if the folder is already in a repo.
+2. Widget, if wanted: **File → New → Target → iOS → Widget Extension**. Uncheck Live Activity, Control and Configuration App Intent unless they're needed. The widget is embedded in the app automatically.
+
+### Per app: settings to fix (for every target)
+Xcode doesn't set these up for an older phone. **New targets start with the defaults again**, so check each target, including any added later.
+
+| Setting | Where in Xcode | Build-setting key | Value | Why |
+|---|---|---|---|---|
+| Minimum iOS version | Target → General → **Minimum Deployments** | `IPHONEOS_DEPLOYMENT_TARGET` | **18.0** (at or below the phone's iOS: Settings → General → About) | Xcode defaults to the newest iOS (27.0). The phone then shows under "Incompatible: OS version lower than deployment target" and can't run the app. |
+| Devices | Target → General → **Supported Destinations** (remove iPad and Mac) | `TARGETED_DEVICE_FAMILY` | **1** (iPhone only; `"1,2"` is iPhone + iPad) | No iPad layout to build or test. |
+| Signing | Target → **Signing & Capabilities** | `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM` | "Automatically manage signing" on, Team = **Personal Team** | Must be the same team on the app and the widget, or the widget won't install. |
+| Bundle ID | Target → General → Identity | `PRODUCT_BUNDLE_IDENTIFIER` | `com.anuraagshankar.<App>`; the widget is `com.anuraagshankar.<App>.<Widget>` | Never change it after installing: a new ID installs as a separate app and leaves the old data behind. |
+| Name under the icon | Target → General → **Display Name** | `INFOPLIST_KEY_CFBundleDisplayName` | e.g. `Translator` | Also the name shown under the widget. Defaults to the project name. |
+| Links from widget into app (if used) | Target → **Info** tab → **URL Types** → + (URL Schemes: e.g. `dualtranslator`) | `INFOPLIST_FILE` pointing at a plist with `CFBundleURLTypes` | your scheme | Lets widget taps open specific screens via `Link(destination:)` / `.onOpenURL`. |
+| Widget sizes | Widget code: `.supportedFamilies([.systemMedium])` | n/a | only the sizes you designed | Otherwise every size appears in the widget gallery. |
+
+To check a setting from the terminal:
+`xcodebuild -project <App>.xcodeproj -showBuildSettings | grep -E "IPHONEOS_DEPLOYMENT_TARGET|TARGETED_DEVICE_FAMILY"`
+
+### Per app: repo hygiene
+- Add `xcuserdata/` to `.gitignore` (Xcode's per-user window and scheme state).
+- Put API keys in a git-ignored Swift file (like `Secrets.swift`), never in committed code.
+- App icon: copy `apple/make-icon.swift`, change the text and colors at the top, and run it into the new `AppIcon.appiconset`. Then add `"filename"` entries to that folder's `Contents.json` (see this app's for the format).
+
+### Per app: first run
+- Pick the **app** scheme (not the widget extension) and the iPhone, then ▶.
+- If "Build Succeeded" but nothing opens, trust the Apple ID again on the phone (only if it's a different Apple ID).
+
+### Per app: automatic refresh
+Copy `apple/refresh.sh` and the plist, then change:
+- In the script: the project path, `-scheme`, the `.app` name in `APP`, the widget `.appex` name in `built_expiry`, and `STATE_DIR`. `DEVICE` stays the same for the same phone.
+- In the plist: `Label` (must be unique), the script path, and the log path. Install it with the `launchctl bootstrap` command below.
+- Each app's script deletes **all** cached profiles, including other apps'. That's harmless: an installed app keeps the profile embedded in it, and the next build of any app just fetches its own again.
+
+### Free-account limits to keep in mind
+- Each target with a new bundle ID (app, widget) registers an App ID. Free accounts are limited in how many new App IDs they can register per week (commonly reported as 10). Reusing an existing bundle ID costs nothing.
+- Free accounts are commonly reported to allow only **3 of your own apps** installed on the phone at once.
+- Capabilities like Push Notifications, iCloud and Sign in with Apple aren't available on a Personal Team. Plain SwiftUI, WidgetKit, networking and URL schemes are all fine.
+
+## Terminal commands
+Device ID of the iPhone: `00008030-000D289E1493402E`.
 
 ```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
+# Is the phone reachable?
 xcrun devicectl list devices
+
+# Build and sign (Xcode's normal build folder; ▶ in Xcode does the same)
+xcodebuild -project apple/DualTranslator/DualTranslator.xcodeproj -scheme DualTranslator \
+  -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+
+# Install over Wi-Fi (the widget is inside the app, no separate install)
+xcrun devicectl device install app --device 00008030-000D289E1493402E \
+  ~/Library/Developer/Xcode/DerivedData/DualTranslator-*/Build/Products/Debug-iphoneos/DualTranslator.app
+
+# Open it (fails if the phone is locked)
+xcrun devicectl device process launch --device 00008030-000D289E1493402E --terminate-existing com.anuraagshankar.DualTranslator
+
+# When does a build stop working? (app and widget each have a profile)
+security cms -D -i <path>/DualTranslator.app/embedded.mobileprovision | plutil -extract ExpirationDate raw -o - -
 ```
 
-Build with development signing (replace project/scheme):
+## Renewing the 7 days
+1. Move the cached profiles out of `~/Library/Developer/Xcode/UserData/Provisioning Profiles/` (one for the app, one for the widget).
+2. Build with `-allowProvisioningUpdates`. Apple issues new profiles valid for 7 days from now.
+3. Check `ExpirationDate` in the new build (above) instead of assuming it moved.
+4. Install over Wi-Fi.
 
+If the Xcode app is open during step 2, it fetches profiles at the same time and the first build can fail with *"Build input file cannot be found: …/Provisioning Profiles/<id>.mobileprovision"*. Building a second time, without deleting anything, succeeds.
+
+## Automation (installed)
+`apple/refresh.sh` does the renewal above. A LaunchAgent runs it **every hour** and at login. Most runs do nothing; it only acts when a refresh is due and the phone is reachable, so the Mac and phone only need to be on the same Wi-Fi now and then.
+
+| Days left on the installed app | Phone reachable? | What happens |
+|---|---|---|
+| More than 5 | n/a | Exits immediately (about 10 ms) |
+| 5 or fewer | No | Logs it, tries again next hour |
+| 5 or fewer | Yes | Fresh profiles → build → check expiry → install (about 15 s) |
+| 2 or fewer, still not refreshed | No | macOS notification with the reason, at most every 12 hours |
+
+Files:
+- Script: `apple/refresh.sh`. `FORCE=1 apple/refresh.sh` refreshes now (still needs the phone reachable).
+- Schedule: `apple/com.anuraagshankar.dualtranslator.refresh.plist`, copied to `~/Library/LaunchAgents/`. It runs as a low-priority background job.
+- State: `~/Library/Application Support/DualTranslatorRefresh/`:
+  - `expiry`: when the installed build stops working, in epoch seconds. Read it with `date -r $(cat expiry)`.
+  - `build/`: the script's own build folder.
+  - `last-build.log`: output of the last build.
+- Log: `~/Library/Logs/DualTranslatorRefresh.log`.
+
+Manage it:
 ```bash
-xcodebuild \
-  -project MyApp.xcodeproj \
-  -scheme MyApp \
-  -configuration Debug \
-  -destination 'generic/platform=iOS' \
-  -derivedDataPath ./build \
-  -allowProvisioningUpdates \
-  build
+# Status (last exit code 0 = fine)
+launchctl print gui/$(id -u)/com.anuraagshankar.dualtranslator.refresh | grep -E "runs|last exit"
+# Stop
+launchctl bootout gui/$(id -u)/com.anuraagshankar.dualtranslator.refresh
+# Start again (after editing the plist, copy it to ~/Library/LaunchAgents first)
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.anuraagshankar.dualtranslator.refresh.plist
 ```
 
-Install wirelessly (replace device ID and app name):
-
-```bash
-xcrun devicectl device install app \
-  --device YOUR_DEVICE_ID \
-  ./build/Build/Products/Debug-iphoneos/MyApp.app
-```
-
-WidgetKit extension is bundled with the containing app; no separate widget installation is needed.
-
-## Automation idea
-- Use macOS `launchd` to invoke a refresh script **every 2 days**.
-- Script should build/sign with a currently valid profile, install, log success/failure, and ideally check the embedded provisioning profile's expiration.
-- Requires Mac awake, iPhone powered on/reachable via the paired wireless connection, and successful Apple signing; retries/alerts are advisable.
-- Preserve bundle identifiers and signing configuration to avoid disrupting installed app data.
+It depends on:
+- The Mac being on with you logged in. Signing needs the login keychain and Xcode's Apple ID session. Missed hours run when the Mac wakes.
+- The phone being on the same Wi-Fi at some point in the 5-day window. Fallback: plug in the cable or press ▶ in Xcode.
+- Xcode staying signed in to the Apple ID. If the session expires, builds fail and the notification says to check **Xcode → Settings → Accounts**.
 
 ## Caveats
-- Some entitlements/features are unavailable to free Personal Teams.
-- Wireless device discovery and pairing vary by Xcode/iOS version; initial USB pairing may be necessary.
-- The 2-day schedule does **not** itself guarantee renewal of the provisioning profile; verify expiration after signing rather than assuming it reset.
-- A PWA can be installed on the Home Screen for free but is **not equivalent to a native WidgetKit widget**.
+- If you press ▶ in Xcode, the phone gets whatever profile Xcode has cached. The script's `expiry` file doesn't know about that, so it may refresh earlier than strictly needed. That's harmless.
+- Whether Apple rate-limits frequent profile requests on free accounts is unknown. This setup asks for about one every 2–3 days.
+- A web app (PWA) on the Home Screen is free and never expires, but it can't provide a real WidgetKit widget.
